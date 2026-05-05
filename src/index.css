@@ -1,0 +1,48 @@
+:root {
+  --navy: #0b1c3c;
+  --navy-light: #14305f;
+  --gold: #f0b933;
+  --gold-dark: #c98e1c;
+  --text: #5a6273;
+  --text-h: #0f172a;
+  --bg: #ffffff;
+  --border: #e6e8ee;
+
+  --sans: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-h);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+#root {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--text-h);
+  letter-spacing: -0.5px;
+}
+
+a { color: inherit; }
+
+button { font-family: inherit; }
