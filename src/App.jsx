@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import Chatbot from './Chatbot'
+import { supabase } from './supabaseClient'
 import {
   BlogPage,
   CatalogCapPage,
@@ -136,15 +137,65 @@ const FEATURES = [
   'ナンバービブ', 'キャプテンマーク', '生地選択', 'ワキ穴仕様',
 ]
 
+const ADMIN_PASSWORD = 'admin1234'
+
 function App() {
-  const [form, setForm] = useState({ name: '', email: '', team: '', design: '', product: '', body: '' })
+  const [form, setForm] = useState({ name: '', email: '', team: '', product: '', message: '' })
   const [menuOpen, setMenuOpen] = useState(false)
   const [page, setPage] = useState('home')
   const [openMobileSub, setOpenMobileSub] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
+  const [inquiries, setInquiries] = useState([])
+  const [loadingInquiries, setLoadingInquiries] = useState(false)
+  const [selectedInquiry, setSelectedInquiry] = useState(null)
   const handleChange = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
-  const handleSubmit = (e) => {
+  const openAdmin = async () => {
+    const pw = window.prompt('管理者パスワードを入力してください(admin1234)')
+    if (pw === null) return
+    if (pw !== ADMIN_PASSWORD) {
+      alert('パスワードが正しくありません')
+      return
+    }
+    setAdminOpen(true)
+    setSelectedInquiry(null)
+    setLoadingInquiries(true)
+    const { data, error } = await supabase
+      .from('inquiries')
+      .select('*')
+      .order('created_at', { ascending: false })
+    setLoadingInquiries(false)
+    if (error) {
+      console.error('inquiries fetch failed:', error)
+      alert('お問い合わせの取得に失敗しました。RLS の SELECT 許可を確認してください。')
+      setInquiries([])
+      return
+    }
+    setInquiries(data || [])
+  }
+  const closeAdmin = () => {
+    setAdminOpen(false)
+    setSelectedInquiry(null)
+  }
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    if (submitting) return
+    setSubmitting(true)
+    const { error } = await supabase.from('inquiries').insert({
+      name: form.name,
+      email: form.email,
+      team: form.team,
+      product: form.product,
+      message: form.message,
+    })
+    setSubmitting(false)
+    if (error) {
+      console.error('inquiry insert failed:', error)
+      alert('送信に失敗しました。時間をおいて再度お試しください。')
+      return
+    }
     alert('お問い合わせを受け付けました。担当者よりご連絡いたします。')
+    setForm({ name: '', email: '', team: '', product: '', message: '' })
   }
   const closeMenu = () => { setMenuOpen(false); setOpenMobileSub(null) }
   const goTo = (key) => (e) => {
@@ -456,10 +507,6 @@ function App() {
               <input type="text" value={form.team} onChange={handleChange('team')} />
             </label>
             <label>
-              ご希望のデザイン
-              <input type="text" value={form.design} onChange={handleChange('design')} placeholder="例: ネイビー × ゴールド、筆記体ロゴ" />
-            </label>
-            <label>
               ご検討中の商品
               <select value={form.product} onChange={handleChange('product')}>
                 <option value="">選択してください</option>
@@ -475,9 +522,11 @@ function App() {
             </label>
             <label className="full">
               お問い合わせ内容
-              <textarea rows="5" value={form.body} onChange={handleChange('body')}></textarea>
+              <textarea rows="5" value={form.message} onChange={handleChange('message')}></textarea>
             </label>
-            <button type="submit" className="btn-primary full">送信する</button>
+            <button type="submit" className="btn-primary full" disabled={submitting}>
+              {submitting ? '送信中…' : '送信する'}
+            </button>
           </form>
         </div>
       </section>
@@ -533,6 +582,84 @@ function App() {
       </footer>
 
       <Chatbot />
+
+      <button className="admin-fab" onClick={openAdmin} aria-label="管理者ページを開く">
+        管理者
+      </button>
+
+      {adminOpen && (
+        <div
+          className="admin-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) closeAdmin() }}
+        >
+          <div className="admin-panel" role="dialog" aria-label="管理者パネル">
+            <div className="admin-header">
+              <h3>
+                {selectedInquiry
+                  ? 'お問い合わせ詳細'
+                  : `お問い合わせ一覧（${inquiries.length}件）`}
+              </h3>
+              <div className="admin-actions">
+                {selectedInquiry && (
+                  <button className="admin-btn" onClick={() => setSelectedInquiry(null)}>
+                    ← 一覧へ戻る
+                  </button>
+                )}
+                <button className="admin-btn admin-close" onClick={closeAdmin} aria-label="閉じる">
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="admin-body">
+              {!selectedInquiry ? (
+                loadingInquiries ? (
+                  <p className="admin-empty">読み込み中…</p>
+                ) : inquiries.length === 0 ? (
+                  <p className="admin-empty">お問い合わせはまだありません。</p>
+                ) : (
+                  <ul className="inquiry-list">
+                    <li className="inquiry-row inquiry-head">
+                      <span>お名前</span>
+                      <span>商品</span>
+                      <span>受信日時</span>
+                    </li>
+                    {inquiries.map((q) => (
+                      <li
+                        key={q.id}
+                        className="inquiry-row"
+                        onClick={() => setSelectedInquiry(q)}
+                      >
+                        <span className="inquiry-name">{q.name}</span>
+                        <span className="inquiry-product">{q.product || '—'}</span>
+                        <span className="inquiry-date">
+                          {new Date(q.created_at).toLocaleString('ja-JP')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : (
+                <dl className="inquiry-detail">
+                  <dt>お名前</dt>
+                  <dd>{selectedInquiry.name}</dd>
+                  <dt>メールアドレス</dt>
+                  <dd>
+                    <a href={`mailto:${selectedInquiry.email}`}>{selectedInquiry.email}</a>
+                  </dd>
+                  <dt>チーム名</dt>
+                  <dd>{selectedInquiry.team || '—'}</dd>
+                  <dt>ご検討中の商品</dt>
+                  <dd>{selectedInquiry.product || '—'}</dd>
+                  <dt>お問い合わせ内容</dt>
+                  <dd className="inquiry-message">{selectedInquiry.message || '—'}</dd>
+                  <dt>受信日時</dt>
+                  <dd>{new Date(selectedInquiry.created_at).toLocaleString('ja-JP')}</dd>
+                </dl>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
